@@ -2,7 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 require('dotenv').config();
 const User = require('./models/user');
-const { authorize, listMessages } = require('./gmail');
+const { authorize, listMessages } = require('./pages/api/auth/gmail');
 
 const app = express();
 

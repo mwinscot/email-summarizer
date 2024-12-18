@@ -18,13 +18,16 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "express-session": "^1.18.1",
-    "googleapis": "^91.0.0",
+    "googleapis": "^144.0.0",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.1",
+    "next": "latest",
     "openai": "^4.76.3",
     "passport": "^0.7.0",
-    "passport-google-oauth20": "^2.0.0"
+    "passport-google-oauth20": "^2.0.0",
+    "react": "latest",
+    "react-dom": "latest"
   },
   "devDependencies": {
     "jest": "^29.7.0"
