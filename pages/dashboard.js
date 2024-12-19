@@ -125,5 +125,5 @@ export default function Dashboard() {
         </div>
       )}
     </div>
-  );
+  ); // End of return
 }
