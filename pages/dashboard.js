@@ -1,11 +1,16 @@
 import { useState, useEffect } from 'react';
-import { MailIcon, StarIcon, RefreshCw } from 'lucide-react';
+import { MailIcon, StarIcon, RefreshCw, CheckSquare } from 'lucide-react';
 
 export default function Dashboard() {
   const [emails, setEmails] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedEmail, setSelectedEmail] = useState(null);
+  const [categories, setCategories] = useState({
+    notInteresting: new Set(),
+    toRead: new Set(),
+    needsAction: new Set()
+  });
 
   const fetchEmails = async () => {
     setLoading(true);
@@ -25,7 +30,6 @@ export default function Dashboard() {
     fetchEmails();
   }, []);
 
-  // Format the date nicely
   const formatDate = (dateStr) => {
     const date = new Date(dateStr);
     return new Intl.DateTimeFormat('en-US', {
@@ -36,16 +40,85 @@ export default function Dashboard() {
     }).format(date);
   };
 
-  // Format the sender's name/email
   const formatSender = (from) => {
     const match = from.match(/"?([^"<]*)"?\s*<?([^>]*)>?/);
     return match ? (match[1] || match[2]) : from;
   };
 
+  const handleCategoryChange = (emailId, category) => {
+    setCategories(prev => {
+      const newCategories = {
+        notInteresting: new Set(prev.notInteresting),
+        toRead: new Set(prev.toRead),
+        needsAction: new Set(prev.needsAction)
+      };
+      
+      // Remove from all categories first
+      Object.values(newCategories).forEach(set => set.delete(emailId));
+      
+      // Add to selected category
+      if (category) {
+        newCategories[category].add(emailId);
+      }
+      
+      return newCategories;
+    });
+  };
+
+  const getEmailsByCategory = (category) => {
+    return emails.filter(email => categories[category].has(email.id));
+  };
+
+  const EmailCard = ({ email, category }) => (
+    <div className="bg-white border rounded-lg p-4 hover:shadow-md transition-shadow">
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <span className="font-medium">{formatSender(email.from)}</span>
+            {email.isStarred && (
+              <StarIcon className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+            )}
+          </div>
+          <div className="font-medium text-gray-900">{email.subject}</div>
+          <div className="text-sm text-gray-600 mt-1">{email.snippet}</div>
+        </div>
+        <div className="flex flex-col items-end gap-2">
+          <div className="text-xs text-gray-500 whitespace-nowrap">
+            {formatDate(email.date)}
+          </div>
+          <select 
+            value={category || ''}
+            onChange={(e) => handleCategoryChange(email.id, e.target.value || null)}
+            className="text-sm border rounded p-1"
+          >
+            <option value="">Uncategorized</option>
+            <option value="notInteresting">Not Interesting</option>
+            <option value="toRead">To Read</option>
+            <option value="needsAction">Needs Action</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  );
+
+  const CategorySection = ({ title, category, emails }) => (
+    <div className="mb-6">
+      <h2 className="text-lg font-semibold mb-3">{title}</h2>
+      <div className="grid gap-4">
+        {emails.map(email => (
+          <EmailCard 
+            key={email.id} 
+            email={email} 
+            category={category}
+          />
+        ))}
+      </div>
+    </div>
+  );
+
   if (error) {
     return (
       <div className="p-4">
-        <h1 className="text-2xl font-bold mb-4">Dashboard</h1>
         <div className="text-red-500 rounded-lg p-4 bg-red-50">
           Error: {error}
         </div>
@@ -75,30 +148,31 @@ export default function Dashboard() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4">
-          {emails.map((email) => (
-            <div
-              key={email.id}
-              className="bg-white border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
-              onClick={() => setSelectedEmail(email)}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{formatSender(email.from)}</span>
-                    {email.isStarred && (
-                      <StarIcon className="h-4 w-4 text-yellow-400 fill-yellow-400" />
-                    )}
-                  </div>
-                  <div className="font-medium text-gray-900">{email.subject}</div>
-                  <div className="text-sm text-gray-600 mt-1">{email.snippet}</div>
-                </div>
-                <div className="text-xs text-gray-500 whitespace-nowrap ml-4">
-                  {formatDate(email.date)}
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="space-y-8">
+          <CategorySection 
+            title="Needs Action" 
+            category="needsAction"
+            emails={getEmailsByCategory('needsAction')}
+          />
+          <CategorySection 
+            title="To Read" 
+            category="toRead"
+            emails={getEmailsByCategory('toRead')}
+          />
+          <CategorySection 
+            title="Not Interesting" 
+            category="notInteresting"
+            emails={getEmailsByCategory('notInteresting')}
+          />
+          <CategorySection 
+            title="Uncategorized" 
+            category=""
+            emails={emails.filter(email => 
+              !categories.notInteresting.has(email.id) &&
+              !categories.toRead.has(email.id) &&
+              !categories.needsAction.has(email.id)
+            )}
+          />
         </div>
       )}
 
@@ -125,5 +199,5 @@ export default function Dashboard() {
         </div>
       )}
     </div>
-  ); // End of return
+  );
 }
