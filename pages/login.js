@@ -13,7 +13,7 @@ export default function Login() {
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold mb-4">Email Summarizer Login</h1>
+      <h1 className="text-2xl font-bold mb-4">Email Login</h1>
       {error ? (
         <p className="text-red-500">{error}</p>
       ) : authUrl ? (

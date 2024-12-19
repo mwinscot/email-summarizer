@@ -1,14 +1,14 @@
-import { getTokensFromCookies } from '../../../utils/auth';
-
-export default async function handler(req, res) {
+export default function handler(req, res) {
   try {
-    const tokens = getTokensFromCookies(req.cookies);
+    const cookieData = req.cookies.gmail_tokens 
+      ? JSON.parse(req.cookies.gmail_tokens) 
+      : null;
     
     res.status(200).json({
-      isAuthenticated: !!tokens,
-      tokenInfo: tokens ? {
-        hasAccessToken: !!tokens.access_token,
-        expiryDate: tokens.expiry_date
+      isAuthenticated: !!cookieData,
+      tokenInfo: cookieData ? {
+        hasAccessToken: !!cookieData.access_token,
+        expiryDate: cookieData.expiry_date
       } : null
     });
   } catch (error) {
