@@ -1,16 +1,14 @@
-import { google } from 'googleapis';
+import { google } from 'googleapis/google.js';
 
 const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
+  process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
   `${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'}/api/auth/google/callback`
 );
 
-// Gmail API scopes we need
 const SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
-  'https://www.googleapis.com/auth/gmail.modify',
-  'https://www.googleapis.com/auth/gmail.labels'
+  'https://www.googleapis.com/auth/gmail.modify'
 ];
 
 export function getAuthUrl() {
@@ -22,105 +20,70 @@ export function getAuthUrl() {
 }
 
 export async function getTokens(code) {
-  const { tokens } = await oauth2Client.getToken(code);
-  return tokens;
-}
-
-export function getGmailClient(accessToken, refreshToken) {
-  const auth = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET
-  );
-
-  auth.setCredentials({
-    access_token: accessToken,
-    refresh_token: refreshToken
-  });
-
-  return google.gmail({ version: 'v1', auth });
-}
-
-export async function fetchEmails(gmail, query = '') {
   try {
-    const response = await gmail.users.messages.list({
-      userId: 'me',
-      q: query,
-      maxResults: 20
+    const { tokens } = await oauth2Client.getToken(code);
+    return tokens;
+  } catch (error) {
+    console.error('Error getting tokens:', error);
+    throw error;
+  }
+}
+
+export async function fetchEmails({ accessToken }) {
+  try {
+    const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=10', {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
     });
 
-    const messages = response.data.messages || [];
-    return await Promise.all(messages.map(message => fetchEmailDetails(gmail, message.id)));
+    if (!response.ok) {
+      throw new Error('Failed to fetch emails');
+    }
+
+    const data = await response.json();
+    const messages = await Promise.all(
+      data.messages.map(message => fetchEmailDetails(message.id, accessToken))
+    );
+
+    return messages;
   } catch (error) {
     console.error('Error fetching emails:', error);
     throw error;
   }
 }
 
-async function fetchEmailDetails(gmail, messageId) {
+async function fetchEmailDetails(messageId, accessToken) {
   try {
-    const message = await gmail.users.messages.get({
-      userId: 'me',
-      id: messageId,
-      format: 'full'
-    });
-
-    const headers = message.data.payload.headers;
-    const getHeader = (name) => headers.find(h => h.name.toLowerCase() === name.toLowerCase())?.value || '';
-
-    // Parse from field
-    const fromHeader = getHeader('from');
-    const fromMatch = fromHeader.match(/(?:"?([^"]*)"?\s)?(?:<?(.+@[^>]+)>?)/);
-    const from = {
-      name: fromMatch ? fromMatch[1] || '' : '',
-      email: fromMatch ? fromMatch[2] || fromHeader : fromHeader
-    };
-
-    // Parse to field
-    const toHeader = getHeader('to');
-    const to = toHeader.split(',').map(addr => {
-      const match = addr.trim().match(/(?:"?([^"]*)"?\s)?(?:<?(.+@[^>]+)>?)/);
-      return {
-        name: match ? match[1] || '' : '',
-        email: match ? match[2] || addr.trim() : addr.trim()
-      };
-    });
-
-    // Get message body
-    let body = '';
-    let snippet = message.data.snippet || '';
-
-    if (message.data.payload.parts) {
-      const textPart = message.data.payload.parts.find(part => 
-        part.mimeType === 'text/plain' || part.mimeType === 'text/html'
-      );
-      if (textPart && textPart.body.data) {
-        body = Buffer.from(textPart.body.data, 'base64').toString();
+    const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
       }
-    } else if (message.data.payload.body.data) {
-      body = Buffer.from(message.data.payload.body.data, 'base64').toString();
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch email details');
     }
 
-    return {
-      messageId: message.data.id,
-      threadId: message.data.threadId,
-      subject: getHeader('subject'),
-      from,
-      to,
-      date: new Date(getHeader('date')),
-      summary: snippet,
-      snippet: snippet,
-      body,
-      isStarred: message.data.labelIds?.includes('STARRED') || false,
-      folder: getFolderFromLabels(message.data.labelIds)
-    };
+    const message = await response.json();
+    return parseMessage(message);
   } catch (error) {
-    console.error(`Error fetching email ${messageId}:`, error);
+    console.error('Error fetching email details:', error);
     throw error;
   }
 }
 
-function getFolderFromLabels(labelIds = []) {
-  if (labelIds.includes('TRASH')) return 'trash';
-  if (labelIds.includes('INBOX')) return 'inbox';
-  return 'archive';
+function parseMessage(message) {
+  const headers = message.payload.headers;
+  const getHeader = (name) => headers.find(h => h.name.toLowerCase() === name.toLowerCase())?.value || '';
+
+  return {
+    id: message.id,
+    threadId: message.threadId,
+    subject: getHeader('subject'),
+    from: getHeader('from'),
+    date: getHeader('date'),
+    snippet: message.snippet,
+    isStarred: message.labelIds?.includes('STARRED') || false
+  };
 }
