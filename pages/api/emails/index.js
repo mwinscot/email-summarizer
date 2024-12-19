@@ -1,35 +1,21 @@
-import { getGmailClient, fetchEmails } from '../../../utils/gmail';
+import { listEmails } from '../../../utils/gmail';
 
 export default async function handler(req, res) {
-  if (req.method === 'GET') {
-    try {
-      const { accessToken, refreshToken } = req.cookies;
-      
-      if (!accessToken || !refreshToken) {
-        return res.status(401).json({ error: 'Not authenticated' });
-      }
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
-      const gmail = await getGmailClient(accessToken, refreshToken);
-      const { folder = 'inbox', search = '' } = req.query;
-      let query = search;
-      
-      switch (folder) {
-        case 'inbox':
-          query += ' in:inbox';
-          break;
-        case 'trash':
-          query += ' in:trash';
-          break;
-        case 'archive':
-          query += ' -in:inbox -in:trash';
-          break;
-      }
-
-      const emails = await fetchEmails(gmail, query);
-      res.status(200).json(emails);
-    } catch (error) {
-      console.error('Email fetch error:', error);
-      res.status(500).json({ error: 'Failed to fetch emails' });
+  try {
+    const tokens = req.cookies.gmail_tokens ? JSON.parse(req.cookies.gmail_tokens) : null;
+    
+    if (!tokens?.access_token) {
+      return res.status(401).json({ error: 'Not authenticated' });
     }
+
+    const emails = await listEmails(tokens.access_token);
+    res.status(200).json(emails);
+  } catch (error) {
+    console.error('Error fetching emails:', error);
+    res.status(500).json({ error: error.message });
   }
 }
