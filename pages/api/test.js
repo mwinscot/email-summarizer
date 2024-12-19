@@ -1,3 +1,6 @@
 export default function handler(req, res) {
-    res.status(200).json({ message: 'API endpoint reached' });
-  }
+  res.status(200).json({ 
+    status: 'ok',
+    time: new Date().toISOString()
+  });
+}
