@@ -27,6 +27,16 @@ export default function Dashboard() {
     fetch('/api/setup-labels', { method: 'POST' });
   }, []);
 
+   // Add this new useEffect for testing
+   useEffect(() => {
+    const testFetch = async () => {
+      const response = await fetch('/api/emails');
+      const data = await response.json();
+      console.log('Fetched emails:', data);
+    };
+    testFetch();
+  }, []);
+  
   const formatDate = (dateStr) => {
     const date = new Date(dateStr);
     return new Intl.DateTimeFormat('en-US', {
