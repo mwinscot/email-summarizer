@@ -39,6 +39,9 @@ export default async function handler(req, res) {
       }
 
       const emailData = await detailResponse.json();
+
+        // Let's log the labels to see what we have
+      console.log('Email labels:', emailData.labelIds);
       
       // Get category from labels
       let category = null;

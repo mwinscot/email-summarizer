@@ -30,15 +30,17 @@ export default async function handler(req, res) {
       ];
   
       // Get existing labels
-      const labelsResponse = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/labels', {
-        headers: {
-          'Authorization': `Bearer ${tokens.access_token}`
-        }
-      });
-  
-      if (!labelsResponse.ok) {
-        throw new Error('Failed to fetch labels');
-      }
+// After creating labels, let's fetch and log them
+const labelsResponse = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/labels', {
+  headers: {
+    'Authorization': `Bearer ${tokens.access_token}`
+  }
+});
+
+if (labelsResponse.ok) {
+  const labels = await labelsResponse.json();
+  console.log('All Gmail labels:', labels.labels);
+}
   
       const existingLabels = await labelsResponse.json();
       const existingLabelNames = existingLabels.labels.map(label => label.name);
