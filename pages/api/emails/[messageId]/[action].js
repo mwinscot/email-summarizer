@@ -15,6 +15,14 @@ export default async function handler(req, res) {
     let method = 'POST';
     let body = null;
 
+    // Define category label prefixes
+    const CATEGORY_PREFIX = 'Label_Category_';
+    const CATEGORY_LABELS = {
+      notInteresting: `${CATEGORY_PREFIX}NotInteresting`,
+      toRead: `${CATEGORY_PREFIX}ToRead`,
+      needsAction: `${CATEGORY_PREFIX}NeedsAction`
+    };
+
     switch (action) {
       case 'star':
         url = `${url}/modify`;
@@ -30,6 +38,23 @@ export default async function handler(req, res) {
       
       case 'trash':
         url = `${url}/trash`;
+        break;
+
+      case 'category':
+        const { category } = req.body;
+        url = `${url}/modify`;
+        method = 'POST';
+
+        // First, get existing labels to remove any existing category
+        const removeLabels = Object.values(CATEGORY_LABELS);
+        
+        // If setting a new category, add it to the labels
+        const addLabels = category ? [CATEGORY_LABELS[category]] : [];
+
+        body = {
+          removeLabelIds: removeLabels,
+          addLabelIds: addLabels
+        };
         break;
       
       default:

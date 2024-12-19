@@ -1,16 +1,11 @@
 import { useState, useEffect } from 'react';
-import { MailIcon, StarIcon, RefreshCw, CheckSquare } from 'lucide-react';
+import { MailIcon, StarIcon, RefreshCw, Trash2 } from 'lucide-react';
 
 export default function Dashboard() {
   const [emails, setEmails] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedEmail, setSelectedEmail] = useState(null);
-  const [categories, setCategories] = useState({
-    notInteresting: new Set(),
-    toRead: new Set(),
-    needsAction: new Set()
-  });
 
   const fetchEmails = async () => {
     setLoading(true);
@@ -28,6 +23,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchEmails();
+    // Set up labels if they don't exist
+    fetch('/api/setup-labels', { method: 'POST' });
   }, []);
 
   const formatDate = (dateStr) => {
@@ -45,31 +42,48 @@ export default function Dashboard() {
     return match ? (match[1] || match[2]) : from;
   };
 
-  const handleCategoryChange = (emailId, category) => {
-    setCategories(prev => {
-      const newCategories = {
-        notInteresting: new Set(prev.notInteresting),
-        toRead: new Set(prev.toRead),
-        needsAction: new Set(prev.needsAction)
-      };
-      
-      // Remove from all categories first
-      Object.values(newCategories).forEach(set => set.delete(emailId));
-      
-      // Add to selected category
-      if (category) {
-        newCategories[category].add(emailId);
+  const handleCategoryChange = async (messageId, category) => {
+    try {
+      const response = await fetch(`/api/emails/${messageId}/category`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ category })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update category');
       }
-      
-      return newCategories;
-    });
+
+      // Refresh emails to get updated data
+      await fetchEmails();
+    } catch (error) {
+      console.error('Error updating category:', error);
+    }
+  };
+
+  const handleAction = async (messageId, action) => {
+    try {
+      const response = await fetch(`/api/emails/${messageId}/${action}`, {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to ${action} email`);
+      }
+
+      await fetchEmails();
+    } catch (error) {
+      console.error(`Error performing ${action}:`, error);
+    }
   };
 
   const getEmailsByCategory = (category) => {
-    return emails.filter(email => categories[category].has(email.id));
+    return emails.filter(email => email.category === category);
   };
 
-  const EmailCard = ({ email, category }) => (
+  const EmailCard = ({ email }) => (
     <div className="bg-white border rounded-lg p-4 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between">
         <div className="flex-1">
@@ -86,16 +100,30 @@ export default function Dashboard() {
           <div className="text-xs text-gray-500 whitespace-nowrap">
             {formatDate(email.date)}
           </div>
-          <select 
-            value={category || ''}
-            onChange={(e) => handleCategoryChange(email.id, e.target.value || null)}
-            className="text-sm border rounded p-1"
-          >
-            <option value="">Uncategorized</option>
-            <option value="notInteresting">Not Interesting</option>
-            <option value="toRead">To Read</option>
-            <option value="needsAction">Needs Action</option>
-          </select>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAction(email.messageId, email.isStarred ? 'unstar' : 'star');
+              }}
+              className="text-gray-400 hover:text-yellow-400"
+            >
+              <StarIcon className={`h-5 w-5 ${email.isStarred ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+            </button>
+            <select 
+              value={email.category || ''}
+              onChange={(e) => {
+                e.stopPropagation();
+                handleCategoryChange(email.messageId, e.target.value || null);
+              }}
+              className="text-sm border rounded p-1"
+            >
+              <option value="">Uncategorized</option>
+              <option value="notInteresting">Not Interesting</option>
+              <option value="toRead">To Read</option>
+              <option value="needsAction">Needs Action</option>
+            </select>
+          </div>
         </div>
       </div>
     </div>
@@ -105,13 +133,18 @@ export default function Dashboard() {
     <div className="mb-6">
       <h2 className="text-lg font-semibold mb-3">{title}</h2>
       <div className="grid gap-4">
-        {emails.map(email => (
-          <EmailCard 
-            key={email.id} 
-            email={email} 
-            category={category}
-          />
-        ))}
+        {emails.length > 0 ? (
+          emails.map(email => (
+            <EmailCard 
+              key={email.messageId} 
+              email={email}
+            />
+          ))
+        ) : (
+          <div className="text-gray-500 text-center py-4">
+            No emails in this category
+          </div>
+        )}
       </div>
     </div>
   );
@@ -166,36 +199,9 @@ export default function Dashboard() {
           />
           <CategorySection 
             title="Uncategorized" 
-            category=""
-            emails={emails.filter(email => 
-              !categories.notInteresting.has(email.id) &&
-              !categories.toRead.has(email.id) &&
-              !categories.needsAction.has(email.id)
-            )}
+            category={null}
+            emails={emails.filter(email => !email.category)}
           />
-        </div>
-      )}
-
-      {selectedEmail && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6">
-            <div className="flex justify-between items-start mb-4">
-              <h2 className="text-xl font-bold">{selectedEmail.subject}</h2>
-              <button 
-                onClick={() => setSelectedEmail(null)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                ×
-              </button>
-            </div>
-            <div className="text-sm text-gray-600 mb-4">
-              <div>From: {selectedEmail.from}</div>
-              <div>Date: {formatDate(selectedEmail.date)}</div>
-            </div>
-            <div className="prose max-w-none">
-              {selectedEmail.snippet}
-            </div>
-          </div>
         </div>
       )}
     </div>
