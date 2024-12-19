@@ -1,26 +1,17 @@
-import { getGmailClient } from '../../utils/gmail';
+import { listEmails } from '../../utils/gmail';
 
 export default async function handler(req, res) {
   try {
-    const { accessToken, refreshToken } = req.cookies;
+    const tokens = req.cookies.gmail_tokens ? JSON.parse(req.cookies.gmail_tokens) : null;
     
-    if (!accessToken || !refreshToken) {
+    if (!tokens?.access_token) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
-    const gmail = await getGmailClient(accessToken, refreshToken);
-    
-    // Just try to list labels as a simple test
-    const response = await gmail.users.labels.list({
-      userId: 'me'
-    });
-
-    res.status(200).json(response.data);
+    const emails = await listEmails(tokens.access_token);
+    res.status(200).json(emails);
   } catch (error) {
     console.error('Gmail test error:', error);
-    res.status(500).json({
-      error: 'Gmail test failed',
-      details: error.message
-    });
+    res.status(500).json({ error: error.message });
   }
 }
